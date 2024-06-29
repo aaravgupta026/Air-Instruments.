@@ -1,335 +1,130 @@
-
 import mediapipe as mp
 import cv2
 import numpy as np
-import uuid
-import os
+import threading
+import playsound
 import random
 
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
-mp_drawing_styles = mp.solutions.drawing_styles
+
 def decide_gesture(inout_list):
-    
-    if all([not(x ^ y)for x, y in zip(inout_list,[True, False, True, True, True])]):
-        return 'one'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[True, False, False, True, True])]):
-        return 'two'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[True, False, False, False, True])]):
-        return 'three'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[True, False, False, False, False])]):
-        return 'four'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[False, False, False, False, False])]):
-        return 'five'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[False, True, True, True, False])]):
-        return 'six'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[False, False, True, True, True])]):
-        return 'seven'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[False, False, False, True, True])]):
-        return 'eight'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[True, False, True, True, False])]):
-        return 'rock1'
-    elif all([not(x ^ y)for x, y in zip(inout_list,[False, False, True, True, False])]):
-        return 'rock2'
+    gestures = {
+        (True, False, True, True, True): 'one',
+        (True, False, False, True, True): 'two',
+        (True, False, False, False, True): 'three',
+        (True, False, False, False, False): 'four',
+        (False, False, False, False, False): 'five',
+        (False, True, True, True, False): 'six',
+        (False, False, True, True, True): 'seven',
+        (False, False, False, True, True): 'eight',
+        (True, False, True, True, False): 'rock1',
+        (False, False, True, True, False): 'rock2',
+    }
+    return gestures.get(tuple(inout_list), None)
+
 def formula_big(x1, x2, x3, y1, y2, y3):
-    
-    mul_x = 640
-    mul_y = 480
-    x1 = x1 * mul_x
-    x2 = x2 * mul_x
-    x3 = x3 * mul_x
-    y1 = y1 * mul_y
-    y2 = y2 * mul_y
-    y3 = y3 * mul_y
-    
+    mul_x, mul_y = 640, 480
+    x1, x2, x3 = x1 * mul_x, x2 * mul_x, x3 * mul_x
+    y1, y2, y3 = y1 * mul_y, y2 * mul_y, y3 * mul_y
     a = (y1 - y2) / (x1 - x2)
     b = y1 - a * x1
-    
-    #cv2.line(image, (int(round((100 - b) / a)), 100), (int(round((480 - b) / a)), 640), (0, 0, 255), 1)
-    
     if x1 > x2:
-        if x3 * a + b > y3 - abs(x1 - x2 + y1 - y2):
-            return True
-        return False
-    else:
-        if x3 * a + b > y3:
-            return False
-        return True
+        return x3 * a + b > y3 - abs(x1 - x2 + y1 - y2)
+    return x3 * a + b <= y3
+
 def formula_other(x1, x2, x3, y1, y2, y3):
-    
-    mul_x = 640
-    mul_y = 480
-    x1 = x1 * mul_x
-    x2 = x2 * mul_x
-    x3 = x3 * mul_x
-    y1 = y1 * mul_y
-    y2 = y2 * mul_y
-    y3 = y3 * mul_y
-    
+    mul_x, mul_y = 640, 480
+    x1, x2, x3 = x1 * mul_x, x2 * mul_x, x3 * mul_x
+    y1, y2, y3 = y1 * mul_y, y2 * mul_y, y3 * mul_y
     a = (y1 - y2) / (x1 - x2)
     b = y1 - a * x1
-    
-    #cv2.line(image, (int(round((100 - b) / a)), 100), (int(round((480 - b) / a)), 640), (0, 0, 255), 1)
-    
-    
     if x1 > x2:
-        if x3 * a + b > y3:
-            return True
-        return False
-    else:
-        if x3 * a + b > y3 + 30:
-            return False
-        return True
-            
-import math
+        return x3 * a + b > y3
+    return x3 * a + b <= y3 + 30
 
-def draw_and_get_finger_angles2(image, results):
-    
-    pos = 20
-    RLmultiply = 0
-    distance = None
-    gesture_left = None
-    gesture_right = None
-    inout = ''
-    # Loop through hands
-    for RL, hand in enumerate(results.multi_hand_landmarks):
-        inout_list = []
-        try:
-            if results.multi_handedness[RL].classification[0].label == 'Right':
-                RLmultiply = 1
-            else:
-                RLmultiply = 0
-        except:
-            pass
-        a = np.array([hand.landmark[4].x, hand.landmark[4].y]) #大拇指尖
-        b = np.array([hand.landmark[8].x, hand.landmark[8].y]) #食指尖
-        c = np.array([hand.landmark[12].x, hand.landmark[12].y]) #中指尖
-        d = np.array([hand.landmark[16].x, hand.landmark[16].y]) #無名指尖
-        e = np.array([hand.landmark[20].x, hand.landmark[20].y]) #小指尖
-        f = np.array([hand.landmark[5].x, hand.landmark[5].y]) #食指根
-        g = np.array([hand.landmark[9].x, hand.landmark[9].y]) #中指根
-        h = np.array([hand.landmark[13].x, hand.landmark[13].y]) #無名指根
-        i = np.array([hand.landmark[17].x, hand.landmark[17].y]) #小指根
-        j = np.array([hand.landmark[0].x, hand.landmark[0].y]) #手腕
-        
-       
-        inout_list.append(formula_big(f[0], j[0], a[0], f[1], j[1], a[1]))
-       
-        inout_list.append(not formula_other(f[0], g[0], b[0], f[1], g[1], b[1]))
-       
-        inout_list.append(not formula_other(f[0], g[0], c[0], f[1], g[1], c[1]))
-       
-        inout_list.append(not formula_other(f[0], g[0], d[0], f[1], g[1], d[1]))
-       
-        inout_list.append(not formula_other(f[0], g[0], e[0], f[1], g[1], e[1]))
-        
-        
-        cv2.putText(image, " ".join(str(x) for x in inout_list), (pos + num * 80 + RLmultiply * 320, 20),
-               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+def draw_and_get_finger_angles(image, results):
+    for hand in results.multi_hand_landmarks:
+        a = np.array([hand.landmark[4].x, hand.landmark[4].y])
+        b = np.array([hand.landmark[8].x, hand.landmark[8].y])
+        c = np.array([hand.landmark[12].x, hand.landmark[12].y])
+        d = np.array([hand.landmark[16].x, hand.landmark[16].y])
+        e = np.array([hand.landmark[20].x, hand.landmark[20].y])
+        f = np.array([hand.landmark[5].x, hand.landmark[5].y])
+        j = np.array([hand.landmark[0].x, hand.landmark[0].y])
+        inout_list = [
+            formula_big(f[0], j[0], a[0], f[1], j[1], a[1]),
+            not formula_other(f[0], np.array([hand.landmark[9].x, hand.landmark[9].y])[0], b[0], f[1], np.array([hand.landmark[9].y, hand.landmark[9].y])[1], b[1]),
+            not formula_other(f[0], np.array([hand.landmark[9].x, hand.landmark[9].y])[0], c[0], f[1], np.array([hand.landmark[9].y, hand.landmark[9].y])[1], c[1]),
+            not formula_other(f[0], np.array([hand.landmark[9].x, hand.landmark[9].y])[0], d[0], f[1], np.array([hand.landmark[9].y, hand.landmark[9].y])[1], d[1]),
+            not formula_other(f[0], np.array([hand.landmark[9].x, hand.landmark[9].y])[0], e[0], f[1], np.array([hand.landmark[9].y, hand.landmark[9].y])[1], e[1]),
+        ]
+        cv2.putText(image, " ".join(str(x) for x in inout_list), (20, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
+        gesture = decide_gesture(inout_list)
+        return image, gesture
 
-        if RLmultiply == 1: # Right
-            gesture_right = decide_gesture(inout_list)
-            distance = math.sqrt((hand.landmark[0].x - hand.landmark[8].x)**2 + (hand.landmark[0].y - hand.landmark[8].y)**2) #distance of wrist and index_finger_dip
-            cv2.putText(image, str(round(distance, 2)), (int(hand.landmark[0].x * 640), int(hand.landmark[0].y * 480) + 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(image, inout, (int(hand.landmark[0].x * 640), int(hand.landmark[0].y * 480) + 60),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-            
-            
-        if RLmultiply == 0: # Lift
-            gesture_left = decide_gesture(inout_list)
-            cv2.putText(image, gesture_left, (int(hand.landmark[0].x * 640), int(hand.landmark[0].y * 480) + 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(image, inout, (int(hand.landmark[0].x * 640), int(hand.landmark[0].y * 480) + 60),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
-            
-    return image, distance, gesture_left, gesture_right
-def draw_line2(image,left_WRIST_y_coord,left_MIDDLE_FINGER_MCP):
-    start_point = left_MIDDLE_FINGER_MCP
-    end_point = (640, 480)
-    color = (0, 255, 0)
-    thickness = 2
-    image = cv2.line(image, start_point, end_point, color, thickness)
-    
-    return image
-def draw_line(image,left_middle_point,left_WRIST_y_coord):
-    start_point = (0, left_middle_point)
-    end_point = (640, left_middle_point)
-    color = (0, 255, 0)
-    thickness = 2
-    image = cv2.line(image, start_point, end_point, color, thickness)
-    return image
-chord_mode_0 = {
-    'one':"C_chord",
-    'two':"A_chord",
-    'three':"D_chord",
-    'four':"G_chord",
-    'eight':"applaud"
-}
-chord_mode_1 = {
-    'one':"1_chord",
-    'two':"2_chord",
-    'three':"3_chord",
-    'four':"4_chord",
-    'eight':"applaud"
-}
-chord_mode_2 = {
-    'one':"C_chord",
-    'two':"D_chord",
-    'three':"E_chord",
-    'four':"F_chord",
-    'five':"G_chord",
-    'six':"A_chord",
-    'seven':"B_chord",
-    'eight':"applaud"
-}
-chord_mode_3 = {
-    'one':"lang/f2_chord",
-    'two':"lang/G",
-    'three':"lang/c7_chord",
-    'four':"lang/a_chord",
-    'five':"lang/b1_chord",
-    'six':"lang/c_chord",
-    'seven':"lang/bsus2_chord",
-    'eight':"lang/f1_chord"
-}
-rock_mode = {
-    1:"X_chord",
-    2:"Y_chord",
-    3:"Z_chord"
-}
-
-chord_modes = [chord_mode_0, chord_mode_1, chord_mode_2, chord_mode_3]
-def change_chord_mode(chord_mode):
-    num_of_mode = len(chord_modes)-1
-    if chord_mode+1 <= num_of_mode:
-        return chord_mode + 1
-    else:
-        return 0
-import playsound
-import threading
-import time
-import winsound
-
-def init_play_chord(chord):
-    print("Thread", chord)
-    playsound.playsound('music/{}.mp3'.format(chord))
-    
 def play_chord(chord):
-    threads[0] = threading.Thread(target = init_play_chord, args = (chord,))
-    threads[0].start()
+    threading.Thread(target=playsound.playsound, args=(f'music/{chord}.mp3',)).start()
 
+chord_modes = [
+    {'one': "C_chord", 'two': "A_chord", 'three': "D_chord", 'four': "G_chord", 'eight': "applaud"},
+    {'one': "1_chord", 'two': "2_chord", 'three': "3_chord", 'four': "4_chord", 'eight': "applaud"},
+    {'one': "C_chord", 'two': "D_chord", 'three': "E_chord", 'four': "F_chord", 'five': "G_chord", 'six': "A_chord", 'seven': "B_chord", 'eight': "applaud"},
+    {'one': "lang/f2_chord", 'two': "lang/G", 'three': "lang/c7_chord", 'four': "lang/a_chord", 'five': "lang/b1_chord", 'six': "lang/c_chord", 'seven': "lang/bsus2_chord", 'eight': "lang/f1_chord"},
+]
 
-threads = []
-threads.append(threading.Thread(target = init_play_chord, args = ("C",)))
-def find_coord(image, results):
-    left_WRIST_y_coord = None
-    right_INEDX_FINGER_DIP = None
-    left_MIDDLE_FINGER_MCP = None
-    for RL, hand in enumerate(results.multi_hand_landmarks):
-        if results.multi_handedness[RL].classification[0].label == 'Left':
-            
-            left_WRIST_y_coord = int(hand.landmark[mp_hands.HandLandmark.WRIST].y * 480)
-            left_MIDDLE_FINGER_MCP = (int(hand.landmark[9].x * 640), int(hand.landmark[9].y * 480))
-            image = draw_line2(image,left_WRIST_y_coord,left_MIDDLE_FINGER_MCP)
-            
-        else:
-            right_INEDX_FINGER_DIP = (int(hand.landmark[8].x * 640), int(hand.landmark[8].y * 480))
-        
-    return image, left_WRIST_y_coord, right_INEDX_FINGER_DIP, left_MIDDLE_FINGER_MCP
+def change_chord_mode(mode):
+    return (mode + 1) % len(chord_modes)
+
 cap = cv2.VideoCapture(0)
-counter = 0 
-chord_mode = 0
-N = 20
-threshold = 0.2
-Status = "up"
-previous_gesture = None
-gesture_left = ''
+counter, chord_mode, status, previous_gesture = 0, 0, "up", None
 
-with mp_hands.Hands(min_detection_confidence=0.8, min_tracking_confidence=0.5) as hands: 
+with mp_hands.Hands(min_detection_confidence=0.8, min_tracking_confidence=0.5) as hands:
     while cap.isOpened():
-        
         ret, frame = cap.read()
         cv2.namedWindow("Hand Tracking", 0)
-        # BGR 2 RGB
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Flip on horizontal
         image = cv2.flip(image, 1)
-        
-        # Set flag
         image.flags.writeable = False
-        
-        # Detections
         results = hands.process(image)
-        
-        # Set flag to true
         image.flags.writeable = True
-        
-        # RGB 2 BGR
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         
-        # Rendering results
         if results.multi_hand_landmarks:
-            for num, hand in enumerate(results.multi_hand_landmarks):
-                mp_drawing.draw_landmarks(image, hand, mp_hands.HAND_CONNECTIONS, 
-                                        mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
-                                        mp_drawing.DrawingSpec(color=(250, 44, 250), thickness=2, circle_radius=2),
-                                         )
-                image, left_WRIST_y_coord, right_INEDX_FINGER_DIP, left_MIDDLE_FINGER_MCP = find_coord(image, results)
+            for hand in results.multi_hand_landmarks:
+                mp_drawing.draw_landmarks(image, hand, mp_hands.HAND_CONNECTIONS)
+                image, gesture_left = draw_and_get_finger_angles(image, results)
         
-            # Draw angles to image from joint list
-            image, distance, gesture_left, gesture_right = draw_and_get_finger_angles2(image, results)
-                 
-        if (gesture_left != 'rock1') and (gesture_left != 'rock2') and counter > N:
+        if gesture_left and counter > 20:
             previous_gesture = gesture_left
             counter = 0
 
         try:
-            is_inside = formula_big(left_MIDDLE_FINGER_MCP[0],640,right_INEDX_FINGER_DIP[0],left_MIDDLE_FINGER_MCP[1],480,right_INEDX_FINGER_DIP[1])
-            #play_or_not_ = 
-            
-           
-            if gesture_left and is_inside :
-              
-                if Status == "up" and distance > 0.4:
-                    play_chord(chord_modes[chord_mode][gesture_left])
-                    counter = 0
-                Status = "down"
-
-            elif gesture_left and (not is_inside):
-                if Status == "down" and distance > 0.4:
-                    play_chord(chord_modes[chord_mode][gesture_left])
-                    counter = 0
-                Status = "up"
-
+            is_inside = formula_big(left_MIDDLE_FINGER_MCP[0], 640, right_INEDX_FINGER_DIP[0], left_MIDDLE_FINGER_MCP[1], 480, right_INEDX_FINGER_DIP[1])
+            if gesture_left and is_inside and status == "up" and distance > 0.4:
+                play_chord(chord_modes[chord_mode][gesture_left])
+                counter = 0
+                status = "down"
+            elif gesture_left and not is_inside and status == "down" and distance > 0.4:
+                play_chord(chord_modes[chord_mode][gesture_left])
+                counter = 0
+                status = "up"
         except:
-            try:
-                if gesture_left == 'rock1' and previous_gesture != 'rock1': 
-                    chord_mode = change_chord_mode(chord_mode)
-                    print("change chord mode!")
-                    previous_gesture = gesture_left
-                    
-                elif gesture_left == 'rock1':
-                    text = 'CHMOD'
-                    cv2.putText(image, text, (150, 200), cv2.FONT_HERSHEY_SIMPLEX,
-                      3, (0, 255, 255), 9, cv2.LINE_AA)
-                    
-                if gesture_left == 'rock2' and previous_gesture != 'rock2': 
-                    random_chord = random.randint(1,3)
-                    #play_chord(rock_mode[random_chord])
-                    previous_gesture = gesture_left
-            except:
-                pass
-        
-        cv2.putText(image, 'chord mode: {}'.format(chord_mode), (380, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2, cv2.LINE_AA)        
+            if gesture_left == 'rock1' and previous_gesture != 'rock1':
+                chord_mode = change_chord_mode(chord_mode)
+                previous_gesture = gesture_left
+            elif gesture_left == 'rock2' and previous_gesture != 'rock2':
+                random_chord = random.randint(1, 3)
+                previous_gesture = gesture_left
+
+        cv2.putText(image, f'chord mode: {chord_mode}', (380, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2, cv2.LINE_AA)
         cv2.resizeWindow("Hand Tracking", 1280, 960)
         cv2.imshow('Hand Tracking', image)
 
         if cv2.waitKey(10) & 0xFF == ord('q'):
             break
-            
-        counter = counter +1 
+
+        counter += 1
 
 cap.release()
 cv2.destroyAllWindows()
